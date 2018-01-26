@@ -15,7 +15,6 @@ end
 
 if SH.paint==1 && count ==0
     figure
-    subplot(1,2,1)
     imshow(BackGround,[])
     title('Image in the CCD (doubles spots are included)')
     set(gcf,'color','w');
@@ -56,8 +55,7 @@ else
 end
 
 if SH.paint==1 && count==0
-    subplot(1,2,2)
-    imshow(BackGround.*ML.AmplitudeMask4Paint,[])
+    figure,imshow(BackGround.*ML.AmplitudeMask4Paint,[])
     title('Image in the CCD (the area of each microlenses is respected). The red point is the reference centroid')
     xlabel('pixels')
     ylabel('pixels')

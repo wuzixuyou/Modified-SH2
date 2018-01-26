@@ -31,16 +31,13 @@ if ReadNoise==1 && flag==1
 end
 
 if SH.paint==1 && count == 0
-    figure
-    subplot(1,2,1)
-    imshow(BackGround,[])
+    figure,imshow(BackGround,[])
     title('Image in the CCD')
     set(gcf,'color','w');
     xlabel('pixels')
     ylabel('pixels')
     
-    subplot(1,2,2)
-    imshow(BackGround.*ML.AmplitudeMask4Paint,[])
+    figure,imshow(BackGround.*ML.AmplitudeMask4Paint,[])
     title('Image in the CCD with centroid (red point) and asigned area for each microlens')
     xlabel('pixels')
     ylabel('pixels')

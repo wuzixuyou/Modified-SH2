@@ -1,10 +1,11 @@
 clear, clc, close all;
+
 %  definition of all of the parameter
 modes=36;ZerValues(1:15)=rand(15,1); ZerValues(16:modes)=0.1*rand(length(16:modes),1);
-resolution=2048; PixelSize=10e-6; LAMBDA=0.78; Lenses=7; focal=10e-3; Prop=1; factor=1e-8; 
+resolution=2048; PixelSize=10e-6; LAMBDA=0.78; Lenses=7; focal=20e-3; Prop=1; factor=1e-8; 
 bits=16; MLGeometry=1 ;paint=1;MLCentroidMethod=1; MLSharedArea=1; MLAberration=1; 
 MLfieldDistortion=0;MLvignetting=1; ObjectMagnitude=0; PupilDiameter=4.2; Exposuretime=1e-2; 
-BandWidth=88; QE=0.90; WellCapacity=18e3; PhotonNoise=1; ReadNoise=1; DarkCurrent=0.01; ...
+BandWidth=88; QE=0.90; WellCapacity=18e3; PhotonNoise=1; ReadNoise=0; DarkCurrent=0.01; ...
 ReadOutNoise=8;
 SH_Ap = 'allPupil';
 % SH_Ap = 'Circle';
@@ -13,6 +14,8 @@ SH_Ap = 'allPupil';
 [SH,ML]=createSH(modes,resolution,PixelSize,LAMBDA,Lenses,focal,Prop,factor,bits,MLGeometry,...
     MLCentroidMethod,MLSharedArea,MLAberration,MLfieldDistortion,MLvignetting,WellCapacity,...
     DarkCurrent,ReadOutNoise,paint,SH_Ap);
+ML.defocus = 3e-3;
+
 
 %Calculate number of photons in reaching detector
 nFot = SH.resolution/(10^(ObjectMagnitude/2.5)); %number of photons from the object (fot/s/cm2/Angstrom)
@@ -33,7 +36,7 @@ delta = 2*R/N;
 [x, y] = meshgrid((-N/2:N/2-1) * delta);
 [theta, r] = cart2pol(x,y);
 
-W = 5 * zernike(6, r/R, theta) .* SH.pupil;
+W = 5 * LAMBDA * zernike(6, r/R, theta) .* SH.pupil;
 % imagesc(W);
 
 %{
@@ -56,6 +59,17 @@ WF=W.*1e-6;%conversion to meters
 %}
 [ML]=MicroLenses(SH,ML,WF);
 
+%-----------------------------------------------
+%caclutate the fresnel propagetion of the modified SH
+%-----------------------------------------------
+[Fresnel_subaper_image] = Fresnel_ModifiedSH(SH, ML, WF);
+
+[Img] = subImgTogether(Fresnel_subaper_image, ML, SH);
+imagesc(Img)
+
+
+
+
 %{
 By defect, Microlenses are perfect shperical lenses according to the
 ideal Fraunhofer propagation. If some aberrations has to be added to
@@ -75,12 +89,12 @@ for i=1:length(ML.coor)
     Lenses{i}=WFSubpupil(ML.coor(i,1):ML.coor(i,2), ML.coor(i,3):ML.coor(i,4));
 end
 
-
-%{
-*************************************************************************
-*************** Point Spread Function Calculation ***********************
-*************************************************************************
-%}
+% 
+% %{
+% *************************************************************************
+% *************** Point Spread Function Calculation ***********************
+% *************************************************************************
+% %}
 PSF=cell(1,length(Lenses));
 PSFmaxLocal=zeros(1,length(Lenses));
 if ML.Prop==0 %CASE OF NO PROPAGATION BETWEEN MICROLENSES AND CCD. Edge effects will exist, it should be implemented a pad with zeros to avoid it
@@ -113,30 +127,30 @@ else
         PSFmaxLocal(j)=max(max(PSF{j}));
     end
 end
-%{
-***************************************************************************
-****** Quantization of the signal, introduction of photonic noise**********
-****************** & introduction of read noise****************************
-***************************************************************************
-Photon noise, also known as Poisson noise, is a basic form of uncertainty 
-associated with the measurement of light, inherent to the quantized nature 
-of light and the independence of photon detections. Its expected magnitude 
-constitutes the dominant source of image noise except in low-light conditions.
-Individual photon detections can be treated as independent events that 
-follow a random temporal distribution. As a result, photon counting is a 
-classic Poisson process.Photon noise is signal  dependent, and its standard 
-deviation grows with the square root of the signal. Contrary to popular 
-belief, shot noise experienced by the detector IS related to the QE of the 
-detector! Back-illuminated sensors with higher QE yields a better 
-Signal/Shot Noise ratio. There is a simple intuitive explanation for this ?
- shot noise must be calculated from the signal represented by the number 
-of photoelectrons in the sensor (electrons generated from photons falling 
-on the sensor), NOT JUST from the number of incoming photons. Therefore, 
-if an average of 100 photons hit a pixel, but the sensor has a QE of 50% at
-the wavelength of these photons, then an average of 50 photoelectrons will 
-be created ?the shot noise and Signal/Shot Noise must be calculated from 
-this value.
-%}
+% %{
+% ***************************************************************************
+% ****** Quantization of the signal, introduction of photonic noise**********
+% ****************** & introduction of read noise****************************
+% ***************************************************************************
+% Photon noise, also known as Poisson noise, is a basic form of uncertainty 
+% associated with the measurement of light, inherent to the quantized nature 
+% of light and the independence of photon detections. Its expected magnitude 
+% constitutes the dominant source of image noise except in low-light conditions.
+% Individual photon detections can be treated as independent events that 
+% follow a random temporal distribution. As a result, photon counting is a 
+% classic Poisson process.Photon noise is signal  dependent, and its standard 
+% deviation grows with the square root of the signal. Contrary to popular 
+% belief, shot noise experienced by the detector IS related to the QE of the 
+% detector! Back-illuminated sensors with higher QE yields a better 
+% Signal/Shot Noise ratio. There is a simple intuitive explanation for this ?
+%  shot noise must be calculated from the signal represented by the number 
+% of photoelectrons in the sensor (electrons generated from photons falling 
+% on the sensor), NOT JUST from the number of incoming photons. Therefore, 
+% if an average of 100 photons hit a pixel, but the sensor has a QE of 50% at
+% the wavelength of these photons, then an average of 50 photoelectrons will 
+% be created ?the shot noise and Signal/Shot Noise must be calculated from 
+% this value.
+% %}
 if SH.bits==0
     fprintf('Calculations performed with "double" precision of MATLAB. \n');
     for j=1:length(PSF)
@@ -150,9 +164,9 @@ else
     end
 end
 
-% paintingBigPSF.mat included the code that create the PSF "seen" by each 
-% microlens, even when there exist energy from surrounding microlenses. It
-% also includes the introduction of photonic and read noise.
+% % paintingBigPSF.mat included the code that create the PSF "seen" by each 
+% % microlens, even when there exist energy from surrounding microlenses. It
+% % also includes the introduction of photonic and read noise.
 if ML.radiusPixels*2==length(PSF{1})
     [PSF,idealPSF]=paintingPSF(PSF,ML,SH,nFot,0,1,PhotonNoise,ReadNoise,Exposuretime);
     drawnow();
@@ -160,11 +174,11 @@ elseif ML.radiusPixels*2~=length(PSF{1})
     [PSF,idealPSF]=paintingBigPSF(PSF,ML,SH,nFot,0,1,PhotonNoise,ReadNoise,Exposuretime);
     drawnow();
 end
-
-
-
-%{
-*************************************************************************
-*************** Defocus image Calculation ***********************
-*************************************************************************
-%}
+% 
+% 
+% 
+% %{
+% *************************************************************************
+% *************** Defocus image Calculation ***********************
+% *************************************************************************
+% %}
